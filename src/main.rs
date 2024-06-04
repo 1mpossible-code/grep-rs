@@ -1,3 +1,14 @@
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(name = "grep-rs")]
+#[command(version, about, long_about = None)]
+struct Args {
+    pattern: String,
+
+    file: String,
+}
+
 fn main() {
-    println!("Hello, world!");
+    let args = Args::parse();
 }
