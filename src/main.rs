@@ -1,4 +1,5 @@
 use clap::Parser;
+use grep_rs::search_in_file;
 
 #[derive(Parser, Debug)]
 #[command(name = "grep-rs")]
@@ -11,4 +12,11 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+
+    let result = search_in_file(&args.pattern, &args.file);
+
+    match result {
+        Ok(()) => 1,
+        Err(e) => panic!("{}", e),
+    };
 }
