@@ -8,11 +8,37 @@ use regex::Regex;
 
 use colored::{ColoredString, Colorize};
 
-pub fn search_in_file(pattern: &str, file_path: &str) -> io::Result<Vec<Vec<ColoredString>>> {
+pub type Match = Vec<ColoredString>;
+
+// finds non regex matches
+pub fn find_exact_matches(pattern: &str, file_path: &str) -> io::Result<Vec<Match>> {
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let mut result: Vec<Match> = vec![];
+
+    for (_, line) in reader.lines().enumerate() {
+        let line = line?;
+        if line.contains(pattern) {
+            let mut colored_line: Match = vec![];
+            let colored_match = pattern.red().bold();
+            let temp_split = line.split(pattern);
+            for phrase in temp_split {
+                colored_line.push(phrase.into());
+                colored_line.push(colored_match.clone());
+            }
+            colored_line.pop();
+            result.push(colored_line)
+        }
+    }
+
+    Ok(result)
+}
+
+pub fn find_regex_matches(pattern: &str, file_path: &str) -> io::Result<Vec<Match>> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
     let re = Regex::new(pattern).unwrap();
-    let mut result: Vec<Vec<ColoredString>> = vec![];
+    let mut result: Vec<Match> = vec![];
 
     for (_, line) in reader.lines().enumerate() {
         let line = line?;
@@ -21,7 +47,7 @@ pub fn search_in_file(pattern: &str, file_path: &str) -> io::Result<Vec<Vec<Colo
             matches.dedup();
 
             for m in matches {
-                let mut colored_line: Vec<ColoredString> = vec![];
+                let mut colored_line: Match = vec![];
                 let colored_match = m.red().bold();
                 let temp_split = line.split(m);
                 for phrase in temp_split {
@@ -37,14 +63,14 @@ pub fn search_in_file(pattern: &str, file_path: &str) -> io::Result<Vec<Vec<Colo
     Ok(result)
 }
 
-pub fn print_match(v: &Vec<ColoredString>) {
+pub fn print_match(v: &Match) {
     for val in v {
         print!("{}", val);
     }
     println!();
 }
 
-pub fn print_all_matches(matches: &Vec<Vec<ColoredString>>) {
+pub fn print_all_matches(matches: &Vec<Match>) {
     for m in matches {
         print_match(&m);
     }
