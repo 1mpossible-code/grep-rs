@@ -1,6 +1,10 @@
-use std::{fs::File, io::{stdin, BufReader, IsTerminal, Read}, path::PathBuf};
+use std::{
+    fs::File,
+    io::{stdin, BufReader, Read},
+    path::PathBuf,
+};
 
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use grep_rs::{find_exact_matches, find_regex_matches, print_all_matches, Match};
 
 #[derive(Parser, Debug)]
@@ -13,34 +17,25 @@ struct Args {
     #[clap(name = "PATTERN")]
     pattern: String,
 
-    file: PathBuf,
+    file: Option<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
-    let file = args.file;
     let result: Result<Vec<Match>, std::io::Error>;
 
-    let reader: Box<dyn Read> = if file == PathBuf::from("-") {
-        if stdin().is_terminal() {
-            Args::command().print_help().unwrap();
-            std::process::exit(2);
-        }
-
-        Box::new(stdin().lock())
-    } else {
-        Box::new(File::open(&file).unwrap())
+    let input: Box<dyn Read> = match args.file {
+        Some(file_path) => Box::new(File::open(file_path).expect("Failed to open file")),
+        None => Box::new(stdin().lock()),
     };
 
-    let reader = BufReader::new(reader);
-
+    let reader = BufReader::new(input);
 
     if args.expression {
         result = find_regex_matches(&args.pattern, reader);
     } else {
         result = find_exact_matches(&args.pattern, reader);
     }
-
 
     match result {
         Ok(m) => print_all_matches(&m),
