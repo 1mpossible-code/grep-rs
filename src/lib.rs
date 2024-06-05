@@ -1,6 +1,5 @@
 use std::{
-    fs::File,
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead},
     vec,
 };
 
@@ -11,12 +10,10 @@ use colored::{ColoredString, Colorize};
 pub type Match = Vec<ColoredString>;
 
 // finds non regex matches
-pub fn find_exact_matches(pattern: &str, file_path: &str) -> io::Result<Vec<Match>> {
-    let file = File::open(file_path)?;
-    let reader = BufReader::new(file);
+pub fn find_exact_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
     let mut result: Vec<Match> = vec![];
 
-    for (_, line) in reader.lines().enumerate() {
+    for (_, line) in buf_reader.lines().enumerate() {
         let line = line?;
         if line.contains(pattern) {
             let mut colored_line: Match = vec![];
@@ -34,13 +31,11 @@ pub fn find_exact_matches(pattern: &str, file_path: &str) -> io::Result<Vec<Matc
     Ok(result)
 }
 
-pub fn find_regex_matches(pattern: &str, file_path: &str) -> io::Result<Vec<Match>> {
-    let file = File::open(file_path)?;
-    let reader = BufReader::new(file);
+pub fn find_regex_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
     let re = Regex::new(pattern).unwrap();
     let mut result: Vec<Match> = vec![];
 
-    for (_, line) in reader.lines().enumerate() {
+    for (_, line) in buf_reader.lines().enumerate() {
         let line = line?;
         if re.is_match(&line) {
             let mut matches: Vec<_> = re.find_iter(&line).map(|m| m.as_str()).collect();

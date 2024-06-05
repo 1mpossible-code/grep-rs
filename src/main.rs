@@ -1,4 +1,6 @@
-use clap::Parser;
+use std::{fs::File, io::{stdin, BufReader, IsTerminal, Read}, path::PathBuf};
+
+use clap::{CommandFactory, Parser};
 use grep_rs::{find_exact_matches, find_regex_matches, print_all_matches, Match};
 
 #[derive(Parser, Debug)]
@@ -11,20 +13,32 @@ struct Args {
     #[clap(name = "PATTERN")]
     pattern: String,
 
-    file: String,
+    file: PathBuf,
 }
 
 fn main() {
     let args = Args::parse();
-
+    let file = args.file;
     let result: Result<Vec<Match>, std::io::Error>;
 
-    if args.expression {
-        println!("expression mode");
-        print!("pattern: {}, file: {}", args.pattern, args.file);
-        result = find_regex_matches(&args.pattern, &args.file);
+    let reader: Box<dyn Read> = if file == PathBuf::from("-") {
+        if stdin().is_terminal() {
+            Args::command().print_help().unwrap();
+            std::process::exit(2);
+        }
+
+        Box::new(stdin().lock())
     } else {
-        result = find_exact_matches(&args.pattern, &args.file);
+        Box::new(File::open(&file).unwrap())
+    };
+
+    let reader = BufReader::new(reader);
+
+
+    if args.expression {
+        result = find_regex_matches(&args.pattern, reader);
+    } else {
+        result = find_exact_matches(&args.pattern, reader);
     }
 
 
