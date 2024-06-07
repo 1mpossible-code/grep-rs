@@ -1,13 +1,71 @@
+use clap::Parser;
+use colored::{ColoredString, Colorize};
+use regex::Regex;
 use std::{
     io::{self, BufRead},
+    path::PathBuf,
     vec,
 };
 
-use regex::Regex;
-
-use colored::{ColoredString, Colorize};
-
 pub type Match = Vec<ColoredString>;
+
+#[derive(Parser, Debug)]
+#[command(name = "grep-rs")]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[clap(short, long)]
+    expression: bool,
+
+    #[clap(name = "PATTERN")]
+    pattern: String,
+
+    file: Option<Vec<PathBuf>>,
+}
+
+pub struct Grep {
+    args: Args,
+    files: Vec<PathBuf>,
+}
+
+impl Grep {
+    pub fn new(args: Args) -> Self {
+        let files = match &args.file {
+            Some(files) => files.clone(),
+            None => vec![],
+        };
+
+        Self { args, files }
+    }
+
+    pub fn run(&self) -> io::Result<()> {
+        let is_multiple_files = self.files.len() != 1;
+
+        for file_path in &self.files {
+            let file = std::fs::File::open(file_path)?;
+            let reader = std::io::BufReader::new(file);
+
+            let result = if self.args.expression {
+                find_regex_matches(&self.args.pattern, reader)
+            } else {
+                find_exact_matches(&self.args.pattern, reader)
+            };
+
+            match result {
+                Ok(matches) => {
+                    for m in matches {
+                        if is_multiple_files {
+                            print!("{}:", file_path.display());
+                        }
+                        print_match(&m);
+                    }
+                }
+                Err(e) => panic!("{}", e),
+            };
+        }
+
+        Ok(())
+    }
+}
 
 // finds non regex matches
 pub fn find_exact_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
@@ -63,10 +121,4 @@ pub fn print_match(v: &Match) {
         print!("{}", val);
     }
     println!();
-}
-
-pub fn print_all_matches(matches: &Vec<Match>) {
-    for m in matches {
-        print_match(&m);
-    }
 }
