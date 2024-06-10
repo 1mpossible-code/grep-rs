@@ -1,124 +1,119 @@
 use clap::Parser;
 use colored::{ColoredString, Colorize};
 use regex::Regex;
-use std::{
-    io::{self, BufRead},
-    path::PathBuf,
-    vec,
-};
+use std::io::{self, BufRead};
+use std::path::PathBuf;
 
 pub type Match = Vec<ColoredString>;
 
 #[derive(Parser, Debug)]
-#[command(name = "grep-rs")]
-#[command(version, about, long_about = None)]
+#[command(name = "grep-rs", version, about, long_about = None)]
 pub struct Args {
     #[clap(short, long)]
-    expression: bool,
+    pub expression: bool,
 
     #[clap(name = "PATTERN")]
-    pattern: String,
+    pub pattern: String,
 
-    file: Option<Vec<PathBuf>>,
+    pub file: Vec<PathBuf>,
 }
 
 pub struct Grep {
-    args: Args,
     files: Vec<PathBuf>,
+    pattern: String,
+    is_expression: bool,
 }
 
 impl Grep {
     pub fn new(args: Args) -> Self {
-        let files = match &args.file {
-            Some(files) => files.clone(),
-            None => vec![],
-        };
-
-        Self { args, files }
+        Self {
+            files: args.file,
+            pattern: args.pattern,
+            is_expression: args.expression,
+        }
     }
 
     pub fn run(&self) -> io::Result<()> {
-        let is_multiple_files = self.files.len() != 1;
-
-        for file_path in &self.files {
-            let file = std::fs::File::open(file_path)?;
-            let reader = std::io::BufReader::new(file);
-
-            let result = if self.args.expression {
-                find_regex_matches(&self.args.pattern, reader)
-            } else {
-                find_exact_matches(&self.args.pattern, reader)
-            };
-
-            match result {
-                Ok(matches) => {
-                    for m in matches {
-                        if is_multiple_files {
-                            print!("{}:", file_path.display());
-                        }
-                        print_match(&m);
-                    }
-                }
-                Err(e) => panic!("{}", e),
-            };
+        if self.files.is_empty() {
+            return Ok(self.process_stdin()?);
         }
-
+        for file_path in &self.files {
+            let matches = self.process_file(file_path)?;
+            self.display_matches(matches, file_path);
+        }
         Ok(())
     }
+
+    fn process_stdin(&self) -> io::Result<()> {
+        let stdin = io::stdin();
+        let reader = stdin.lock();
+        let matches = if self.is_expression {
+            find_regex_matches(&self.pattern, reader)?
+        } else {
+            find_exact_matches(&self.pattern, reader)?
+        };
+        self.display_matches(matches, &PathBuf::from("stdin"));
+        Ok(())
+    }
+
+    fn process_file(&self, file_path: &PathBuf) -> io::Result<Vec<Match>> {
+        let file = std::fs::File::open(file_path)?;
+        let reader = std::io::BufReader::new(file);
+        if self.is_expression {
+            find_regex_matches(&self.pattern, reader)
+        } else {
+            find_exact_matches(&self.pattern, reader)
+        }
+    }
+
+    fn display_matches(&self, matches: Vec<Match>, file_path: &PathBuf) {
+        for match_line in matches {
+            if self.files.len() > 1 {
+                print!("{}:", file_path.display());
+            }
+            print_match(&match_line);
+        }
+    }
 }
 
-// finds non regex matches
-pub fn find_exact_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
-    let mut result: Vec<Match> = vec![];
-
-    for (_, line) in buf_reader.lines().enumerate() {
+fn find_exact_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
+    let mut results = Vec::new();
+    for line in buf_reader.lines() {
         let line = line?;
         if line.contains(pattern) {
-            let mut colored_line: Match = vec![];
-            let colored_match = pattern.red().bold();
-            let temp_split = line.split(pattern);
-            for phrase in temp_split {
-                colored_line.push(phrase.into());
-                colored_line.push(colored_match.clone());
-            }
-            colored_line.pop();
-            result.push(colored_line)
+            results.push(colorize_match(&line, pattern));
         }
     }
-
-    Ok(result)
+    Ok(results)
 }
 
-pub fn find_regex_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
+fn find_regex_matches<R: BufRead>(pattern: &str, buf_reader: R) -> io::Result<Vec<Match>> {
     let re = Regex::new(pattern).unwrap();
-    let mut result: Vec<Match> = vec![];
-
-    for (_, line) in buf_reader.lines().enumerate() {
+    let mut results = Vec::new();
+    for line in buf_reader.lines() {
         let line = line?;
-        if re.is_match(&line) {
-            let mut matches: Vec<_> = re.find_iter(&line).map(|m| m.as_str()).collect();
-            matches.dedup();
-
-            for m in matches {
-                let mut colored_line: Match = vec![];
-                let colored_match = m.red().bold();
-                let temp_split = line.split(m);
-                for phrase in temp_split {
-                    colored_line.push(phrase.into());
-                    colored_line.push(colored_match.clone());
-                }
-                colored_line.pop();
-                result.push(colored_line)
-            }
+        for mat in re.find_iter(&line) {
+            results.push(colorize_match(&line, mat.as_str()));
         }
     }
-
-    Ok(result)
+    Ok(results)
 }
 
-pub fn print_match(v: &Match) {
-    for val in v {
-        print!("{}", val);
+fn colorize_match(text: &str, pattern: &str) -> Match {
+    let colored_match = pattern.red().bold();
+    let mut result = Vec::new();
+    let parts = text.split(pattern);
+    for part in parts {
+        result.push(part.into());
+        result.push(colored_match.clone());
+    }
+    result.pop(); // Remove the last redundant colored match
+    result
+}
+
+fn print_match(match_line: &Match) {
+    for part in match_line {
+        print!("{}", part);
     }
     println!();
 }
