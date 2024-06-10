@@ -12,6 +12,9 @@ pub struct Args {
     #[clap(short, long)]
     pub expression: bool,
 
+    #[clap(short, long)]
+    pub ignore_case: bool,
+
     #[clap(name = "PATTERN")]
     pub pattern: String,
 
@@ -22,6 +25,7 @@ pub struct Grep {
     files: Vec<PathBuf>,
     pattern: String,
     is_expression: bool,
+    ignore_case: bool,
 }
 
 impl Grep {
@@ -30,6 +34,7 @@ impl Grep {
             files: args.file,
             pattern: args.pattern,
             is_expression: args.expression,
+            ignore_case: args.ignore_case,
         }
     }
 
@@ -67,11 +72,22 @@ impl Grep {
     }
 
     fn find_exact_matches<R: BufRead>(&self, buf_reader: R) -> io::Result<Vec<Match>> {
+        let pattern = if self.ignore_case {
+            self.pattern.to_lowercase()
+        } else {
+            self.pattern.clone()
+        };
         let mut results = Vec::new();
         for line in buf_reader.lines() {
             let line = line?;
-            if line.contains(self.pattern.as_str()) {
-                results.push(colorize_match(&line, self.pattern.as_str()));
+            let line_to_check = if self.ignore_case {
+                line.to_lowercase()
+            } else {
+                line.as_str().to_string()
+            };
+            if line_to_check.contains(pattern.as_str()) {
+                // TODO: Fix the printing as lower case
+                results.push(colorize_match(&line_to_check, self.pattern.as_str()));
             }
         }
         Ok(results)
