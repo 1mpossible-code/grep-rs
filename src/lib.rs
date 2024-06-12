@@ -86,8 +86,7 @@ impl Grep {
                 line.as_str().to_string()
             };
             if line_to_check.contains(pattern.as_str()) {
-                // TODO: Fix the printing as lower case
-                results.push(colorize_match(&line_to_check, self.pattern.as_str()));
+                results.push(colorize_match(&line, &line_to_check, self.pattern.as_str()));
             }
         }
         Ok(results)
@@ -99,7 +98,7 @@ impl Grep {
         for line in buf_reader.lines() {
             let line = line?;
             for mat in re.find_iter(&line) {
-                results.push(colorize_match(&line, mat.as_str()));
+                results.push(colorize_match(&line, &line, mat.as_str()));
             }
         }
         Ok(results)
@@ -107,15 +106,23 @@ impl Grep {
 
 }
 
-fn colorize_match(text: &str, pattern: &str) -> Match {
-    let colored_match = pattern.red().bold();
+fn colorize_match(original_text: &str, text_to_search: &str, pattern: &str) -> Match {
+    let length = pattern.len();
     let mut result = Vec::new();
-    let parts = text.split(pattern);
-    for part in parts {
-        result.push(part.into());
-        result.push(colored_match.clone());
+    let mut start_ind: usize = 0;
+    let mut match_option = text_to_search[start_ind..].find(pattern);
+
+    while match_option.is_some() {
+        let match_ind = match_option.unwrap();
+        let end_ind = start_ind + match_ind;
+        result.push(ColoredString::from(original_text[start_ind..end_ind].to_string()));
+        result.push(ColoredString::from(original_text[end_ind..end_ind + length].to_string().bold().red()));
+        start_ind = end_ind + length;
+        match_option = text_to_search[start_ind..].find(pattern);
     }
-    result.pop(); // Remove the last redundant colored match
+
+    result.push(ColoredString::from(original_text[start_ind..].to_string()));
+
     result
 }
 
