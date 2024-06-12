@@ -1,26 +1,7 @@
-use clap::Parser;
 use colored::{ColoredString, Colorize};
 use regex::Regex;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-
-#[derive(Parser, Debug)]
-#[command(name = "grep-rs", version, about, long_about = None)]
-pub struct Args {
-    #[clap(short, long)]
-    pub expression: bool,
-
-    #[clap(short, long)]
-    pub ignore_case: bool,
-
-    #[clap(short='n', long="line-number")]
-    pub line_number: bool,
-
-    #[clap(name = "PATTERN")]
-    pub pattern: String,
-
-    pub file: Vec<PathBuf>,
-}
 
 struct Match {
     string_vec: Vec<ColoredString>,
@@ -45,14 +26,13 @@ impl Match {
     }
 
     fn add_file_name(&mut self) {
-        self.string_vec.insert(
-            0,
-            ColoredString::from(format!("{}:", self.file_path)),
-        );
+        self.string_vec
+            .insert(0, ColoredString::from(format!("{}:", self.file_path)));
     }
 
     fn add_line_number(&mut self) {
-        self.string_vec.insert(0, ColoredString::from(format!("{}:", self.line_number)));
+        self.string_vec
+            .insert(0, ColoredString::from(format!("{}:", self.line_number)));
     }
 }
 
@@ -65,13 +45,19 @@ pub struct Grep {
 }
 
 impl Grep {
-    pub fn new(args: Args) -> Self {
+    pub fn new(
+        files: Vec<PathBuf>,
+        pattern: String,
+        is_expression: bool,
+        ignore_case: bool,
+        is_line_number: bool,
+    ) -> Self {
         Self {
-            files: args.file,
-            pattern: args.pattern,
-            is_expression: args.expression,
-            ignore_case: args.ignore_case,
-            is_line_number: args.line_number,
+            files,
+            pattern,
+            is_expression,
+            ignore_case,
+            is_line_number,
         }
     }
 
@@ -108,7 +94,11 @@ impl Grep {
         }
     }
 
-    fn find_exact_matches<R: BufRead>(&self, buf_reader: R, file_name: &str) -> io::Result<Vec<Match>> {
+    fn find_exact_matches<R: BufRead>(
+        &self,
+        buf_reader: R,
+        file_name: &str,
+    ) -> io::Result<Vec<Match>> {
         let pattern = if self.ignore_case {
             self.pattern.to_lowercase()
         } else {
@@ -124,14 +114,22 @@ impl Grep {
                 line.as_str().to_string()
             };
             if line_to_check.contains(pattern.as_str()) {
-                results.push(Match::new(colorize_match(&line, &line_to_check, self.pattern.as_str()), file_name, line_number));
+                results.push(Match::new(
+                    colorize_match(&line, &line_to_check, self.pattern.as_str()),
+                    file_name,
+                    line_number,
+                ));
             }
             line_number += 1;
         }
         Ok(results)
     }
 
-    fn find_regex_matches<R: BufRead>(&self, buf_reader: R, file_name: &str) -> io::Result<Vec<Match>> {
+    fn find_regex_matches<R: BufRead>(
+        &self,
+        buf_reader: R,
+        file_name: &str,
+    ) -> io::Result<Vec<Match>> {
         let re = Regex::new(self.pattern.as_str()).unwrap();
         let mut results = Vec::new();
         let mut counter: usize = 0;
@@ -139,7 +137,11 @@ impl Grep {
             let line = line?;
             for mat in re.find_iter(&line) {
                 // results.push(colorize_match(&line, &line, mat.as_str()));
-                results.push(Match::new(colorize_match(&line, &line, mat.as_str()), file_name, counter));
+                results.push(Match::new(
+                    colorize_match(&line, &line, mat.as_str()),
+                    file_name,
+                    counter,
+                ));
             }
             counter += 1;
         }
